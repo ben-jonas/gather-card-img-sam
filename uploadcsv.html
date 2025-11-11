@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CSV Upload</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        
+        h1 {
+            color: #333;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        
+        input[type="file"] {
+            display: block;
+            margin-bottom: 10px;
+        }
+        
+        button {
+            padding: 10px 20px;
+            margin-right: 10px;
+            cursor: pointer;
+        }
+        
+        .status {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            display: none;
+        }
+        
+        .status.show {
+            display: block;
+        }
+        
+        .status.success {
+            background-color: #d4edda;
+            border-color: #c3e6cb;
+            color: #155724;
+        }
+        
+        .status.error {
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
+            color: #721c24;
+        }
+        
+        .status.loading {
+            background-color: #fff3cd;
+            border-color: #ffeaa7;
+            color: #856404;
+        }
+        
+        .file-info {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #f5f5f5;
+            border: 1px solid #ddd;
+            display: none;
+        }
+        
+        .file-info.show {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <h1>Upload CSV File</h1>
+    
+    <form id="uploadForm">
+        <div class="form-group">
+            <label for="fileInput">Select CSV File:</label>
+            <input type="file" id="fileInput" accept=".csv,text/csv" required>
+        </div>
+        
+        <div class="file-info" id="fileInfo">
+            <strong>Selected file:</strong> <span id="fileName"></span><br>
+            <strong>Size:</strong> <span id="fileSize"></span>
+        </div>
+        
+        <button type="submit" id="uploadBtn">Upload File</button>
+        <button type="button" id="clearBtn">Clear</button>
+    </form>
+    
+    <div class="status" id="status"></div>
+
+    <script>
+        const uploadForm = document.getElementById('uploadForm');
+        const fileInput = document.getElementById('fileInput');
+        const fileInfo = document.getElementById('fileInfo');
+        const fileName = document.getElementById('fileName');
+        const fileSize = document.getElementById('fileSize');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const status = document.getElementById('status');
+        
+        // Replace with your actual API Gateway endpoint
+        const API_ENDPOINT = 'https://your-api-gateway-url.execute-api.region.amazonaws.com/prod/upload';
+        
+        // Show file info when file is selected
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                fileName.textContent = file.name;
+                fileSize.textContent = formatFileSize(file.size);
+                fileInfo.classList.add('show');
+                hideStatus();
+            }
+        });
+        
+        // Handle form submission
+        uploadForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const file = fileInput.files[0];
+            if (!file) {
+                showStatus('Please select a file', 'error');
+                return;
+            }
+            
+            // Validate file type
+            if (!file.name.endsWith('.csv') && file.type !== 'text/csv') {
+                showStatus('Please select a CSV file', 'error');
+                return;
+            }
+            
+            showStatus('Uploading...', 'loading');
+            uploadBtn.disabled = true;
+            
+            try {
+                // Read file as plain text
+                const csvText = await fileToText(file);
+                
+                // Send to API as plain text
+                const response = await fetch(API_ENDPOINT, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'text/csv',
+                    },
+                    body: csvText
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    showStatus('File uploaded successfully! ' + (result.message || ''), 'success');
+                } else {
+                    const error = await response.text();
+                    showStatus('Upload failed: ' + error, 'error');
+                }
+            } catch (error) {
+                showStatus('Upload failed: ' + error.message, 'error');
+            } finally {
+                uploadBtn.disabled = false;
+            }
+        });
+        
+        // Clear button
+        clearBtn.addEventListener('click', () => {
+            uploadForm.reset();
+            fileInfo.classList.remove('show');
+            hideStatus();
+        });
+        
+        function fileToText(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    resolve(reader.result);
+                };
+                reader.onerror = error => reject(error);
+                reader.readAsText(file);
+            });
+        }
+        
+        function formatFileSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1048576) return (bytes / 1024).toFixed(2) + ' KB';
+            return (bytes / 1048576).toFixed(2) + ' MB';
+        }
+        
+        function showStatus(message, type) {
+            status.className = 'status show ' + type;
+            status.textContent = message;
+        }
+        
+        function hideStatus() {
+            status.classList.remove('show');
+        }
+    </script>
+</body>
+</html>

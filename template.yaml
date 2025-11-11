@@ -1,0 +1,161 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform:
+  - AWS::Serverless-2016-10-31
+Description: >
+  gather-card-imgs-sam
+
+  Sample SAM Template for gather-card-imgs-sam
+
+Globals:
+  Function:
+    Runtime: python3.13
+    Timeout: 30
+    MemorySize: 256
+    Architectures:
+      - arm64
+    Environment:
+      Variables:
+        SCRAPER_APP_VERSION: prealpha_nov2025
+
+        # Maps external domains (K) containing card images to the CSS class (V) that 
+        # contains relevant image links for a given card page, i.e. when our scraper 
+        # retrieves a page from one of the domains represesenting a single card,
+        # it will use BeautifulSoup to extract an image link from that page, by 
+        # searching for the css class.
+
+        # The keys to this map also represent the domains that the scraper may visit.
+        # The scraper should ensure that requests to scrape other domains will fail.
+        APPROVED_DOMAINS_TO_CARDIMG_SELECTORS: >
+          {
+            "scryfall.com": "card",
+            "pkmncards.com": "card-image"
+          }
+
+Resources:
+  CardImgBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: "Retain"
+    UpdateReplacePolicy: "Retain"
+    Properties:
+      BucketName: !Sub '${AWS::StackName}-card-img-bucket-${AWS::AccountId}'
+
+  # API Gateway
+  CardImgApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: prod
+      Auth:
+        ApiKeyRequired: false
+      Cors:
+        AllowMethods: "'POST, GET, OPTIONS'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'"
+        AllowOrigin: "'*'"
+  
+  # Queue and DLQ for pending single-card requests
+  CardImgFetchQueue: #TODO reconsider values for timeouts, retention, maxReceiveCount
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: CardImgFetchQueue
+      VisibilityTimeout: 300
+      MessageRetentionPeriod: 86400
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt CardImgFetchDeadLetterQueue.Arn
+        maxReceiveCount: 3
+  CardImgFetchDeadLetterQueue: #TODO reconsider value for retention
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: CardImgFetchDLQ
+      MessageRetentionPeriod: 1209600
+  
+  # DynamoDB table to track status of card image batches
+  CardImgBatchStatusTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: CardimgBatchStatus
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: batchId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: batchId
+          KeyType: HASH
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+
+  ScrapeSingleCardImgFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/cardimg_single_scrape
+      Handler: app.lambda_handler
+      Policies: 
+        - DynamoDBReadPolicy:
+            TableName: !Ref CardImgBatchStatusTable
+      Environment:
+        Variables:
+          CARDIMG_BUCKET: !Ref CardImgBucket
+      Events:
+        SQSEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt CardImgFetchQueue.Arn
+  
+  CardImgAddBatchFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/cardimg_add_batch
+      Handler: app.lambda_handler
+      Policies:
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt CardImgFetchQueue.QueueName
+        - DynamoDBWritePolicy:
+            TableName: !Ref CardImgBatchStatusTable
+      Events:
+        CardImgAddBatchApiEndpt:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CardImgApi
+            Path: /cardimg/batch/add
+            Method: post
+  
+  CardImgViewBatchStatusFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/cardimg_view_batch_status
+      Handler: app.lambda_handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref CardImgBatchStatusTable
+      Events:
+        CardImgViewBatchStatusApiEndpt:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CardImgApi
+            Path: /cardimg/batch/view-status
+            Method: get
+
+Outputs:
+  CardImgBucketName:
+    Description: S3 bucket name for card images
+    Value: !Ref CardImgBucket
+
+  QueueUrl:
+    Description: SQS Queue URL
+    Value: !Ref CardImgFetchQueue
+
+  CardImgBatchStatusTableName:
+    Description: DynamoDB table name for batch status
+    Value: !Ref CardImgBatchStatusTable
+  
+  ApiEndpoint:
+    Description: API Gateway endpoint URL
+    Value: !Sub 'https://${CardImgApi}.execute-api.${AWS::Region}.amazonaws.com/prod'
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiEndpoint'
+
+  SubmitBatchUrl:
+    Description: URL to submit a new batch
+    Value: !Sub 'https://${CardImgApi}.execute-api.${AWS::Region}.amazonaws.com/prod/cardimg/batch/add'
+
+  CheckStatusUrl:
+    Description: URL pattern to check batch status
+    Value: !Sub 'https://${CardImgApi}.execute-api.${AWS::Region}.amazonaws.com/prod/cardimg/batch/{batchId}/view-status'

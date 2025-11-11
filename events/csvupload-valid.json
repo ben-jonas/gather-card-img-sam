@@ -1,0 +1,53 @@
+{
+  "body": "TCG,Card Name,Card Page URI\nMtG,Embargo,https://scryfall.com/card/mmq/77/embargo\nMtG,Thraben Charm,https://scryfall.com/card/mh3/45/thraben-charm\nMtG,Eviscerator's Insight,https://scryfall.com/card/mh3/93/eviscerators-insight\nPokemon,Machoke · Base Set 2 (B2) #49,https://pkmncards.com/card/machoke-base-set-2-b2-49/\nPokemon,Diglett · Base Set 2 (B2) #71,https://pkmncards.com/card/diglett-base-set-2-b2-71/\nPokemon,Mr. Mime · Base Set 2 (B2) #27,https://pkmncards.com/card/mr-mime-base-set-2-b2-27/",
+  "resource": "/cardimg/batch/add",
+  "path": "/cardimg/batch/add",
+  "httpMethod": "POST",
+  "isBase64Encoded": false,
+  "pathParameters": {
+    "proxy": "/path/to/resource"
+  },
+  "stageVariables": {
+    "baz": "qux"
+  },
+  "headers": {
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+    "Accept-Encoding": "gzip, deflate, sdch",
+    "Accept-Language": "en-US,en;q=0.8",
+    "Content-Type": "text/csv",
+    "Host": "1234567890.execute-api.us-east-1.amazonaws.com",
+    "Upgrade-Insecure-Requests": "1",
+    "User-Agent": "Custom User Agent String",
+    "Via": "1.1 08f323deadbeefa7af34d5feb414ce27.cloudfront.net (CloudFront)",
+    "X-Amz-Cf-Id": "cDehVQoZnx43VYQb9j2-nvCh-9z396Uhbp027Y2JvkCPNLmGJHqlaA==",
+    "X-Forwarded-For": "127.0.0.1, 127.0.0.2",
+    "X-Forwarded-Port": "443",
+    "X-Forwarded-Proto": "https"
+  },
+  "requestContext": {
+    "accountId": "123456789012",
+    "resourceId": "123456",
+    "stage": "prod",
+    "requestId": "c6af9ac6-7b61-11e6-9a41-93e8deadbeef",
+    "requestTime": "09/Apr/2015:12:34:56 +0000",
+    "requestTimeEpoch": 1428582896000,
+    "identity": {
+      "cognitoIdentityPoolId": null,
+      "accountId": null,
+      "cognitoIdentityId": null,
+      "caller": null,
+      "accessKey": null,
+      "sourceIp": "127.0.0.1",
+      "cognitoAuthenticationType": null,
+      "cognitoAuthenticationProvider": null,
+      "userArn": null,
+      "userAgent": "Custom User Agent String",
+      "user": null
+    },
+    "path": "/prod/cardimg/batch/add",
+    "resourcePath": "/cardimg/batch/add",
+    "httpMethod": "POST",
+    "apiId": "1234567890",
+    "protocol": "HTTP/1.1"
+  }
+}
