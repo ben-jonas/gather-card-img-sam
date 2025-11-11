@@ -7,7 +7,7 @@ services: dict[str, Any] = {
     "sqs": None
 }
 # This allows mocking of boto3 in tests of lambda_handler() while retaining
-# the benefits of lambda execution environment reuse out in production
+# the benefits of lambda execution environment reuse out in production.
 def _init_aws_srvcs_once():
     if not services["sqs"]:
         services["sqs"] = boto3.client("sqs")
@@ -31,7 +31,7 @@ def lambda_handler(event, context) -> dict[str, Any]:
             if CARD_PAGE_URI_COLUMN not in csv_headercheck[0]:
                 raise ValueError(f"Missing column {CARD_PAGE_URI_COLUMN}")
             csv_reader = csv.DictReader(StringIO(event['body']))
-        except KeyError:
+        except (KeyError, IndexError):
             user_errors["bodyErrors"] = ["Request body missing or inaccessible"]
         except ValueError:
             user_errors["bodyErrors"] =["CSV headers missing or malformed"]
@@ -40,7 +40,7 @@ def lambda_handler(event, context) -> dict[str, Any]:
             single_row_errors = validate_csvdata_singlerows(data)
             if single_row_errors:
                 user_errors["singleRowErrors"] = single_row_errors
-            # Could add cross-field validations here. Perhaps to enforce uniqueness?
+            # Could add cross-field validations here. Perhaps enforce uniqueness?
 
         if user_errors:
             return {
@@ -79,13 +79,17 @@ def validate_csvdata_singlerows(csvdata:list[dict[str,str]]) -> dict[int,list[st
 def validate_cardpage_uri(csv_row:dict[str, str]) -> list[str]:
     errors = []
     try:
-        cardpage_uri = urlparse(csv_row[CARD_PAGE_URI_COLUMN].lower())
-        if not (cardpage_uri.scheme and cardpage_uri.netloc):
-            errors.append("uri scheme and/or netloc missing (uri should begin with 'https://www.some-domain')")
-        elif cardpage_uri.scheme != "https":
-            errors.append("uri must begin with https")
-        elif cardpage_uri.netloc.removeprefix('www.') not in APPROVED_DOMAINS:
-            errors.append("uri not in approved domains")
+        cardpage_uri_text = csv_row[CARD_PAGE_URI_COLUMN]
+        if not cardpage_uri_text:
+            errors.append("uri missing")
+        else:
+            cardpage_uri = urlparse(csv_row[CARD_PAGE_URI_COLUMN].lower())
+            if not (cardpage_uri.scheme and cardpage_uri.netloc):
+                errors.append("uri scheme and/or netloc missing (uri should begin with 'https://www.some-domain')")
+            elif cardpage_uri.scheme != "https":
+                errors.append("uri must begin with https")
+            elif cardpage_uri.netloc.removeprefix('www.') not in APPROVED_DOMAINS:
+                errors.append("uri not in approved domains")
     except KeyError as ke:
         errors.append("malformed row")
     return errors

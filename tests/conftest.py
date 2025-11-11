@@ -2,45 +2,20 @@ import json
 import pytest
 from pathlib import Path
 
-CSVUPLOAD_HAPPY_CASES = [
-    pytest.param(
-        "csvupload-valid.json",
-        id="happy_1"
-    )
-]
-
-CSVUPLOAD_ERROR_CASES = [
-    pytest.param(
-        "csvupload-faulty-emptyfile.json",
-        400,
-        id="empty_body"
-    ),
-    pytest.param(
-        "csvupload-faulty-missingheader.json",
-        400,
-        id="no_headers"
-    ),
-    pytest.param(
-        "csvupload-faulty-wrongheaders.json",
-        400,
-        id="wrong_column_names"
-    ),
-    pytest.param(
-        "csvupload-faulty-missingcolumns.json",
-        400,
-        id="incomplete_row"
-    ),
-    pytest.param(
-        "csvupload-faulty-invalidurl.json",
-        400,
-        id="invalid_urls"
-    ),
-    pytest.param(
-        "csvupload-faulty-emptyvalues.json",
-        400,
-        id="empty_fields"
-    ),
-]
+def pytest_configure():
+    """Make test data available globally via pytest namespace."""
+    pytest.CSVUPLOAD_PAYLOADERROR_CASES = [ # type:ignore[reportAttributeAccessIssue]
+        pytest.param("csvupload/payloaderror/emptyfile.json", 400, id="empty_file"),
+        pytest.param("csvupload/payloaderror/emptyvalues.json", 400, id="empty_values"),
+        pytest.param("csvupload/payloaderror/invalidurl.json", 400, id="invalid_url"),
+        pytest.param("csvupload/payloaderror/missingcolumns.json", 400, id="missing_columns"),
+        pytest.param("csvupload/payloaderror/missingheader.json", 400, id="missing_header"),
+        pytest.param("csvupload/payloaderror/wrongheaders.json", 400, id="wrong_headers"),
+    ]
+    
+    pytest.CSVUPLOAD_HAPPY_CASES = [ # type:ignore[reportAttributeAccessIssue]
+        pytest.param("csvupload/happypath/csvupload-valid.json", 200, id="valid_csv"),
+    ]
 
 @pytest.fixture
 def project_root():

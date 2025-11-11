@@ -2,6 +2,9 @@
     "python.testing.pytestArgs": [
         "tests"
     ],
+    "python.analysis.extraPaths": [
+        "${workspaceFolder}/src"
+    ],
     "python.testing.unittestEnabled": false,
     "python.testing.pytestEnabled": true
 }
