@@ -104,6 +104,9 @@ Resources:
     Properties:
       CodeUri: src/cardimg_add_batch
       Handler: app.lambda_handler
+      Environment:
+        Variables:
+          CARD_IMG_FETCH_QUEUE: !Ref CardImgFetchQueue
       Policies:
         - SQSSendMessagePolicy:
             QueueName: !GetAtt CardImgFetchQueue.QueueName

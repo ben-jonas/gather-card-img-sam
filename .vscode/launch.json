@@ -21,7 +21,8 @@
             "justMyCode": false,
             "env": {
                 "PYTHONPATH": "${workspaceFolder}/src",
-                "APPROVED_DOMAINS_TO_CARDIMG_SELECTORS": "{\"scryfall.com\": \"card\", \"pkmncards.com\": \"card-image\"}"
+                "APPROVED_DOMAINS_TO_CARDIMG_SELECTORS": "{\"scryfall.com\": \"card\", \"pkmncards.com\": \"card-image\"}",
+                "CARD_IMG_FETCH_QUEUE": "https://localhost:8080/not/a/real/uri"
             }
         },
         {
