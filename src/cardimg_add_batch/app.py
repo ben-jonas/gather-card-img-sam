@@ -3,14 +3,7 @@ from io import StringIO
 from typing import Any
 from urllib.parse import urlparse
 
-services: dict[str, Any] = {
-    "sqs": None
-}
-
-def _init_aws_srvcs_once():
-    if not services["sqs"]:
-        services["sqs"] = boto3.client("sqs")
-
+sqs = boto3.client("sqs")
 
 # We only care about the keys of the APPROVED_DOMAINS_TO_CARDIMG_SELECTORS
 # variable; the values are only relevant to the 'single scrape' lambda.
@@ -21,7 +14,6 @@ CARD_PAGE_URI_COLUMN = "Card Page URI"
 
 def lambda_handler(event, context) -> dict[str, Any]:
     try:
-        _init_aws_srvcs_once()
         data, user_errors = validate_event(event)
         if user_errors:
             return {
@@ -30,12 +22,11 @@ def lambda_handler(event, context) -> dict[str, Any]:
                 "body": json.dumps(user_errors),
             }
         else:
-            for row in data:
-                send_imgrequest_to_sqs(row)
+            responses = send_csvrows_to_sqs(data)
             return {
                 "statusCode": 200,
                 "headers": {'Content-Type': 'application/json'},
-                "body": json.dumps(data),
+                "body": json.dumps(responses),
             }
     except Exception as e:
         return {
@@ -44,8 +35,18 @@ def lambda_handler(event, context) -> dict[str, Any]:
             'body': json.dumps({'error': str(type(e))})
         }
 
-def send_imgrequest_to_sqs(csv_row: dict[str, str]) -> None:
-    pass
+
+def send_csvrows_to_sqs(csv_data:list[dict[str, str]]) -> list[dict[str,str]]:
+    responses = []
+    for line in csv_data:
+        sqs_response = sqs.send_message(
+            QueueUrl=CARD_IMG_FETCH_QUEUE,
+            MessageBody=json.dumps(line)
+        )
+        responses.append(sqs_response)
+    return responses
+        
+        
     
 def validate_event(event) -> tuple[list[dict[str, str]], dict[str, Any]]:
     data = []

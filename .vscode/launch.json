@@ -1,6 +1,7 @@
 {
     "version": "0.2.0",
     "configurations": [
+
         {
             "name": "Python Debugger: Current File",
             "type": "debugpy",
@@ -21,8 +22,6 @@
             "justMyCode": false,
             "env": {
                 "PYTHONPATH": "${workspaceFolder}/src",
-                "APPROVED_DOMAINS_TO_CARDIMG_SELECTORS": "{\"scryfall.com\": \"card\", \"pkmncards.com\": \"card-image\"}",
-                "CARD_IMG_FETCH_QUEUE": "https://localhost:8080/not/a/real/uri"
             }
         },
         {
@@ -36,7 +35,22 @@
             },
             "lambda": {
                 "payload": {
-                    "path": "${workspaceFolder}/events/csvupload-valid.json"
+                    "path": "${workspaceFolder}/events/csvupload/happypath/csvupload-valid.json"
+                }
+            }
+        },
+        {
+            "type": "aws-sam",
+            "request": "direct-invoke",
+            "name": "gather-card-imgs-sam:ScrapeSingleCardImgFunction - valid",
+            "invokeTarget": {
+                "target": "template",
+                "templatePath": "${workspaceFolder}/template.yaml",
+                "logicalId": "ScrapeSingleCardImgFunction"
+            },
+            "lambda": {
+                "payload": {
+                    "path": "${workspaceFolder}/events/scraper/happypath/six-messages-sample.json"
                 }
             }
         }

@@ -1,3 +1,5 @@
+print("STARTING SINGLE SCRAPE EXECUTION ENVIRONMENT")
+
 from bs4 import BeautifulSoup
 from datetime import datetime
 from urllib.parse import urlparse, ParseResult
@@ -7,6 +9,7 @@ CARDIMG_BUCKET = os.environ['CARDIMG_BUCKET']
 SCRAPER_APP_VERSION = os.environ['SCRAPER_APP_VERSION']
 APPROVED_DOMAINS_TO_CARDIMG_SELECTORS = \
     json.loads(os.environ['APPROVED_DOMAINS_TO_CARDIMG_SELECTORS'])
+CARD_PAGE_URI_COLUMN = "Card Page URI"
 
 # Matches the img src as capture grp 1 and the query params as grp 3
 # Only matches raster image types (excludes icons and vector images).
@@ -17,13 +20,16 @@ SLEEP_TIME = .1
 s3 = boto3.client('s3')
 
 def lambda_handler(event, context):
+    print("SINGLE SCRAPE HANDLING BATCH FROM QUEUE")
+    print(f"EVENT LOOKS LIKE {json.dumps(event)}")
     sqs_records = event['Records']
 
-    for record in sqs_records:
+    for (i, record) in enumerate(sqs_records):
+        print(f"Handling record {i} of {len(sqs_records)}")
         try:
             record_body = json.loads(record['body'])
             # batch_id = record_body['batchId']
-            parsed_cardpage_uri = urlparse(record_body['cardpageUri'])
+            parsed_cardpage_uri = urlparse(record_body['Card Page URI'])
             if not (parsed_cardpage_uri.scheme == 'https'):
                 raise ValueError("Cardpage link must start with https://")
             cardpage_domain = parsed_cardpage_uri.netloc.lower().removeprefix("www.")
@@ -34,13 +40,12 @@ def lambda_handler(event, context):
             locate_and_upload_img(parsed_cardpage_uri, cardimg_selector)
             
         except Exception as e:
-            print(str(e))
+            print(f"Exception occured: {str(e)}")
             return {
                 'statusCode': 500,
                 'headers': {'Content-Type': 'application/json'},
                 'body': json.dumps({'error': 'Internal server error'})
             }
-
     return {
         "statusCode": 200,
         'headers': {'Content-Type': 'application/json'},
@@ -50,7 +55,6 @@ def lambda_handler(event, context):
     }
 
 def locate_and_upload_img(parsed_cardpage_uri:ParseResult, cardimg_selector:str):
-
     cardimg_uri = get_cardimg_uri(parsed_cardpage_uri, cardimg_selector)
 
     time.sleep(SLEEP_TIME)
@@ -70,8 +74,8 @@ def locate_and_upload_img(parsed_cardpage_uri:ParseResult, cardimg_selector:str)
                 Body=imgdata,
                 ContentType=mimetypes.guess_file_type(terminal_name)[0],
                 Metadata={
-                    "SCRAPER_APP_VERSION": SCRAPER_APP_VERSION,
-                    "datetime": datetime.now(),
+                    "scraper_app_version": SCRAPER_APP_VERSION,
+                    "datetime": datetime.now().isoformat(),
                     "original_img_uri": cardimg_uri
                 }
     )
