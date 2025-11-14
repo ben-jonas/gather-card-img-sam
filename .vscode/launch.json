@@ -44,19 +44,20 @@
             }
         },
         {
-            "type": "aws-sam",
-            "request": "direct-invoke",
-            "name": "gather-card-imgs-sam:ScrapeSingleCardImgFunction - valid",
-            "invokeTarget": {
-                "target": "template",
-                "templatePath": "${workspaceFolder}/template.yaml",
-                "logicalId": "ScrapeSingleCardImgFunction"
+            "type": "debugpy",
+            "request": "launch",
+            "name": "Invoke cardimg_single_scrape lambda handler with Event vs localstack",
+            "program": "${workspaceFolder}/localdev/local_runner.py",
+            "args": [
+                "${workspaceFolder}/src/cardimg_single_scrape/app.py",
+                "${workspaceFolder}/events/scraper/happypath/six-messages-sample.json"
+            ],
+            "env": {
+                "SCRAPER_APP_VERSION": "local0",
+                "APPROVED_DOMAINS_TO_CARDIMG_SELECTORS": "{\"scryfall.com\": \"card\", \"pkmncards.com\": \"card-image\"}",
+                "CARDIMG_BUCKET": "gather-card-imgs-sam-card-img-bucket-000000000000"
             },
-            "lambda": {
-                "payload": {
-                    "path": "${workspaceFolder}/events/scraper/happypath/six-messages-sample.json"
-                }
-            }
+            "console": "integratedTerminal"
         }
     ]
 }

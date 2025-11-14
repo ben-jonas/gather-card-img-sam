@@ -1,5 +1,3 @@
-print("STARTING SINGLE SCRAPE EXECUTION ENVIRONMENT")
-
 from bs4 import BeautifulSoup
 from datetime import datetime
 from urllib.parse import urlparse, ParseResult
