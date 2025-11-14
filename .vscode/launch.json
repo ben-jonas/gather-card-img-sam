@@ -7,7 +7,10 @@
             "type": "debugpy",
             "request": "launch",
             "program": "${file}",
-            "console": "integratedTerminal"
+            "console": "integratedTerminal",
+            "env": {
+                "AWS_PROFILE": "localstack"
+            }
         },
         {
             "name": "All Unit Tests",
@@ -22,6 +25,7 @@
             "justMyCode": false,
             "env": {
                 "PYTHONPATH": "${workspaceFolder}/src",
+                "AWS_PROFILE": "localstack"
             }
         },
         {
