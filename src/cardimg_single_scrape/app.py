@@ -18,12 +18,9 @@ SLEEP_TIME = .1
 s3 = boto3.client('s3')
 
 def lambda_handler(event, context):
-    print("SINGLE SCRAPE HANDLING BATCH FROM QUEUE")
-    print(f"EVENT LOOKS LIKE {json.dumps(event)}")
     sqs_records = event['Records']
 
     for (i, record) in enumerate(sqs_records):
-        print(f"Handling record {i} of {len(sqs_records)}")
         try:
             record_body = json.loads(record['body'])
             # batch_id = record_body['batchId']
