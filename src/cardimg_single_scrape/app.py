@@ -19,12 +19,12 @@ s3 = boto3.client('s3')
 
 def lambda_handler(event, context):
     sqs_records = event['Records']
-
+    print(f"Handling event with {len(sqs_records)} csv entries.")
     for (i, record) in enumerate(sqs_records):
         try:
             record_body = json.loads(record['body'])
             # batch_id = record_body['batchId']
-            parsed_cardpage_uri = urlparse(record_body['Card Page URI'])
+            parsed_cardpage_uri = urlparse(record_body['Card Page URI'].removesuffix('/'))
             if not (parsed_cardpage_uri.scheme == 'https'):
                 raise ValueError("Cardpage link must start with https://")
             cardpage_domain = parsed_cardpage_uri.netloc.lower().removeprefix("www.")
@@ -32,7 +32,11 @@ def lambda_handler(event, context):
                 raise ValueError("Cardpage domain " + cardpage_domain + 
                                  " not in approved domains")
             cardimg_selector = APPROVED_DOMAINS_TO_CARDIMG_SELECTORS[cardpage_domain]
-            locate_and_upload_img(parsed_cardpage_uri, cardimg_selector)
+            if already_has_key_at(parsed_cardpage_uri):
+                print(f"Object already exists at {get_s3_prefix_for_cardimg(parsed_cardpage_uri)}.")
+            else:
+                print(f"Object not found at {get_s3_prefix_for_cardimg(parsed_cardpage_uri)}. Retrieving it from {parsed_cardpage_uri.netloc}...")
+                locate_and_upload_img(parsed_cardpage_uri, cardimg_selector)
             
         except Exception as e:
             print(f"Exception occured: {str(e)}")
@@ -49,6 +53,13 @@ def lambda_handler(event, context):
         }),
     }
 
+def already_has_key_at(parsed_cardpage_uri:ParseResult) -> bool:
+    s3_response = s3.list_objects_v2(
+        Bucket=CARDIMG_BUCKET,
+        Prefix=get_s3_prefix_for_cardimg(parsed_cardpage_uri)
+    )
+    return s3_response.get('Contents') is not None
+
 def locate_and_upload_img(parsed_cardpage_uri:ParseResult, cardimg_selector:str):
     cardimg_uri = get_cardimg_uri(parsed_cardpage_uri, cardimg_selector)
 
@@ -58,11 +69,9 @@ def locate_and_upload_img(parsed_cardpage_uri:ParseResult, cardimg_selector:str)
         raise RuntimeError("status code was " + str(resp.status_code))
     imgdata = resp.content
 
-    # Saving the S3 object as the name of the actual image but under
-    # the path of the hosting webpage.
-    s3path = (parsed_cardpage_uri.netloc + parsed_cardpage_uri.path).lower()
-    terminal_name = "img." + urlparse(cardimg_uri).path.split('.')[-1]
-    cardimg_s3key = '/'.join([s3path, terminal_name])
+    prefix = get_s3_prefix_for_cardimg(parsed_cardpage_uri)
+    terminal_name = "img." + urlparse(cardimg_uri).path.split('.')[-1] # "img." + file extension
+    cardimg_s3key = prefix + terminal_name
     s3.put_object(
                 Bucket=CARDIMG_BUCKET,
                 Key=cardimg_s3key,
@@ -92,3 +101,6 @@ def clean_cardimg_uri(cardimg_uri:str) -> str:
             + cardimg_uri
             + "' does not end with a valid image extension")
     return match.group(1)
+
+def get_s3_prefix_for_cardimg(parsed_cardpage_uri:ParseResult) -> str:
+    return f"{(parsed_cardpage_uri.netloc + parsed_cardpage_uri.path).lower()}/"

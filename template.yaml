@@ -90,6 +90,8 @@ Resources:
       Policies: 
         - DynamoDBReadPolicy:
             TableName: !Ref CardImgBatchStatusTable
+        - S3CrudPolicy:
+            BucketName: !Ref CardImgBucket
       Environment:
         Variables:
           CARDIMG_BUCKET: !Ref CardImgBucket
