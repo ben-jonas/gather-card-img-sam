@@ -1,9 +1,13 @@
-import boto3, csv, json, os
+import boto3, csv, json, os, uuid
+from datetime import datetime
 from io import StringIO
 from typing import Any
 from urllib.parse import urlparse
+from validators.url import url as validators_url
 
 sqs = boto3.client("sqs")
+dynamodb = boto3.resource("dynamodb")
+
 
 # We only care about the keys of the APPROVED_DOMAINS_TO_CARDIMG_SELECTORS
 # variable; the values are only relevant to the 'single scrape' lambda.
@@ -22,9 +26,10 @@ def lambda_handler(event, context) -> dict[str, Any]:
                 "body": json.dumps(user_errors),
             }
         else:
+            create_dynamo_record(data)
             responses = send_csvrows_to_sqs(data)
             return {
-                "statusCode": 200,
+                "statusCode": 202,
                 "headers": {'Content-Type': 'application/json'},
                 "body": json.dumps(responses),
             }
@@ -34,20 +39,8 @@ def lambda_handler(event, context) -> dict[str, Any]:
             'headers': {'Content-Type': 'application/json'},
             'body': json.dumps({'error': str(type(e))})
         }
-
-
-def send_csvrows_to_sqs(csv_data:list[dict[str, str]]) -> list[dict[str,str]]:
-    responses = []
-    for line in csv_data:
-        sqs_response = sqs.send_message(
-            QueueUrl=CARD_IMG_FETCH_QUEUE,
-            MessageBody=json.dumps(line)
-        )
-        responses.append(sqs_response)
-    return responses
-        
-        
     
+
 def validate_event(event) -> tuple[list[dict[str, str]], dict[str, Any]]:
     data = []
     user_errors = {}
@@ -69,6 +62,7 @@ def validate_event(event) -> tuple[list[dict[str, str]], dict[str, Any]]:
 
     return data, user_errors
 
+
 def _validate_csvdata_singlerows(csvdata:list[dict[str,str]]) -> dict[int,list[str]]:
     errors_by_row = {}
     for (i, row) in  enumerate(csvdata):
@@ -87,14 +81,42 @@ def _validate_cardpage_uri(csv_row:dict[str, str]) -> list[str]:
         cardpage_uri_text = csv_row[CARD_PAGE_URI_COLUMN]
         if not cardpage_uri_text:
             errors.append("uri missing")
+        # urllib will allow a lot of arbitrary input, so this next check is to avoid js or html injections
+        elif not validators_url(cardpage_uri_text):
+            errors.append("uri not valid (make sure it starts with 'https://' and points to a real webpage)")
         else:
             cardpage_uri = urlparse(cardpage_uri_text.lower())
-            if not (cardpage_uri.scheme and cardpage_uri.netloc):
-                errors.append("uri scheme and/or netloc missing (uri should begin with 'https://www.some-domain')")
-            elif cardpage_uri.scheme != "https":
-                errors.append("uri must begin with https")
+            if cardpage_uri.scheme != "https":
+                errors.append("uri must begin with 'https://'")
             elif cardpage_uri.netloc.removeprefix('www.') not in APPROVED_DOMAINS:
                 errors.append("uri not in approved domains")
+                
     except KeyError as ke:
         errors.append("malformed row")
     return errors
+
+
+def send_csvrows_to_sqs(csv_data:list[dict[str, str]]) -> list[dict[str,str]]:
+    responses = []
+    for line in csv_data:
+        sqs_response = sqs.send_message(
+            QueueUrl=CARD_IMG_FETCH_QUEUE,
+            MessageBody=json.dumps(line)
+        )
+        responses.append(sqs_response)
+    return responses
+
+
+def create_dynamo_record(csv_data:list[dict[str, str]]) -> str:
+    progress_document = {}
+    for row in csv_data:
+        progress_document[row[CARD_PAGE_URI_COLUMN]] = "PENDING"
+    batch_id = uuid.uuid4()
+    batchStatusTable = dynamodb.Table("CardImgBatchStatus") # type:ignore[reportAttributeAccessIssue]
+    batchStatusTable.put_item(Item={
+        "batchId": str(batch_id),
+        "createdDate": datetime.now().isoformat(),
+        "progressDocument": progress_document
+        }
+    )
+    return str(batch_id)

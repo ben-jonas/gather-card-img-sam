@@ -1,9 +1,17 @@
-import json
+import json, os
 import pytest
 from pathlib import Path
 
 def pytest_configure():
-    """Make test data available globally via pytest namespace."""
+    """Pre-test configuration for all unit tests."""
+
+    # Make sure that aws endpoint url is unset, so that moto works as expected.
+    # (If moto can determine that AWS_ENDPOINT_URL is available, it will use it preferentially,
+    # instead of its in-memory mocked aws services.)
+    if os.environ.get('AWS_PROFILE'):
+        del os.environ['AWS_PROFILE']
+    if os.environ.get('AWS_ENDPOINT_URL'):
+        del os.environ['AWS_ENDPOINT_URL']
     pytest.CSVUPLOAD_PAYLOADERROR_CASES = [ # type:ignore[reportAttributeAccessIssue]
         pytest.param("csvupload/payloaderror/emptyfile.json", 400, id="empty_file"),
         pytest.param("csvupload/payloaderror/emptyvalues.json", 400, id="empty_values"),
@@ -14,7 +22,7 @@ def pytest_configure():
     ]
     
     pytest.CSVUPLOAD_HAPPY_CASES = [ # type:ignore[reportAttributeAccessIssue]
-        pytest.param("csvupload/happypath/csvupload-valid.json", 200, id="valid_csv"),
+        pytest.param("csvupload/happypath/csvupload-valid.json", 202, id="valid_csv"),
     ]
 
 @pytest.fixture

@@ -71,14 +71,18 @@ Resources:
   CardImgBatchStatusTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: CardimgBatchStatus
+      TableName: CardImgBatchStatus
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: batchId
           AttributeType: S
+        - AttributeName: createdDate
+          AttributeType: S
       KeySchema:
         - AttributeName: batchId
           KeyType: HASH
+        - AttributeName: createdDate
+          KeyType: RANGE
       StreamSpecification:
         StreamViewType: NEW_AND_OLD_IMAGES
 

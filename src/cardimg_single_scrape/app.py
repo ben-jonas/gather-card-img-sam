@@ -15,15 +15,26 @@ IMG_SRC_REGEX_PATTERN = r'^(.*\.(jpg|jpeg|png|gif|webp|avif|bmp|tiff|tif))(\?.*)
 
 SLEEP_TIME = .1
 
+SCRAPE_SUCCESS_STATUS = 0
+SCRAPE_FAILURE_STATUS = -1
+
 s3 = boto3.client('s3')
+dynamodb = boto3.resource("dynamodb")
+batchStatusTable = dynamodb.Table("CardImgBatchStatus") # type:ignore[reportAttributeAccessIssue]
 
 def lambda_handler(event, context):
-    sqs_records = event['Records']
-    print(f"Handling event with {len(sqs_records)} csv entries.")
-    for (i, record) in enumerate(sqs_records):
+    sqs_record_bodies = [ json.loads(record['body']) for record in event['Records'] ]
+    print(f"Handling event with {len(sqs_record_bodies)} csv entries.")
+
+    # Our way of handling failed scrape requests is unsophisticated. An exception that occurs
+    # partway through the batch of queued events will cause this whole lambda invocation to fail.
+    # Any unprocessed queue events will be dropped, so we have to save them as failures during
+    # exception processing. Therefore, we assign the statuses to all failures until we confirm
+    # their success, one at a time.
+    statuses = { row['Card Page URI']: SCRAPE_FAILURE_STATUS for row in sqs_record_bodies }
+
+    for record_body in sqs_record_bodies:
         try:
-            record_body = json.loads(record['body'])
-            # batch_id = record_body['batchId']
             parsed_cardpage_uri = urlparse(record_body['Card Page URI'].removesuffix('/'))
             if not (parsed_cardpage_uri.scheme == 'https'):
                 raise ValueError("Cardpage link must start with https://")
@@ -37,9 +48,12 @@ def lambda_handler(event, context):
             else:
                 print(f"Object not found at {get_s3_prefix_for_cardimg(parsed_cardpage_uri)}. Retrieving it from {parsed_cardpage_uri.netloc}...")
                 locate_and_upload_img(parsed_cardpage_uri, cardimg_selector)
+            # TODO save success to dynamo
+            statuses[record_body['Card Page URI']] = SCRAPE_SUCCESS_STATUS
             
         except Exception as e:
             print(f"Exception occured: {str(e)}")
+            # TODO save all failures to dynamo
             return {
                 'statusCode': 500,
                 'headers': {'Content-Type': 'application/json'},
@@ -49,7 +63,7 @@ def lambda_handler(event, context):
         "statusCode": 200,
         'headers': {'Content-Type': 'application/json'},
         "body": json.dumps({
-            "message": f"located + uploaded {len(sqs_records)} objects"
+            "message": f"located + uploaded {len(sqs_record_bodies)} objects"
         }),
     }
 
