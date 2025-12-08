@@ -41,7 +41,25 @@
                 "payload": {
                     "path": "${workspaceFolder}/events/csvupload/happypath/csvupload-valid.json"
                 }
-            }
+            },
+        },
+        {
+            "type": "debugpy",
+            "request": "launch",
+            "name": "Invoke cardimg_add_batch lambda handler with Event vs localstack",
+            "program": "${workspaceFolder}/localdev/local_runner.py",
+            "args": [
+                "invoke_handler",
+                "${workspaceFolder}/src/cardimg_add_batch/app.py",
+                "${workspaceFolder}/events/csvupload/happypath/ten-messages-sample-upload.json"
+            ],
+            "env": {
+                "SCRAPER_APP_VERSION": "local0",
+                "APPROVED_DOMAINS_TO_CARDIMG_SELECTORS": "{\"scryfall.com\": \"card\", \"pkmncards.com\": \"card-image\"}",
+                "CARDIMG_BUCKET": "gather-card-imgs-sam-card-img-bucket-000000000000",
+                "CARD_IMG_FETCH_QUEUE": "http://sqs.us-east-1.localhost.localstack.cloud:4566/000000000000/CardImgFetchQueue"
+            },
+            "console": "integratedTerminal"
         },
         {
             "type": "debugpy",
@@ -49,8 +67,27 @@
             "name": "Invoke cardimg_single_scrape lambda handler with Event vs localstack",
             "program": "${workspaceFolder}/localdev/local_runner.py",
             "args": [
+                "invoke_handler",
                 "${workspaceFolder}/src/cardimg_single_scrape/app.py",
-                "${workspaceFolder}/events/scraper/happypath/six-messages-sample.json"
+                "${workspaceFolder}/events/scraper/happypath/ten-messages-sample.json"
+            ],
+            "env": {
+                "SCRAPER_APP_VERSION": "local0",
+                "APPROVED_DOMAINS_TO_CARDIMG_SELECTORS": "{\"scryfall.com\": \"card\", \"pkmncards.com\": \"card-image\"}",
+                "CARDIMG_BUCKET": "gather-card-imgs-sam-card-img-bucket-000000000000"
+            },
+            "console": "integratedTerminal"
+        },
+        {
+            "type": "debugpy",
+            "request": "launch",
+            "name": "Load new batch-in-progress from csv file to localstack's dynamodb",
+            "program": "${workspaceFolder}/localdev/local_runner.py",
+            "args": [
+                "create_batch_in_progress",
+                "${workspaceFolder}",
+                "${workspaceFolder}/events/csvupload/happypath/ten-messages-sample-upload.json",
+                "7bbf9329-bad0-4be6-89e1-0490b99330d6"
             ],
             "env": {
                 "SCRAPER_APP_VERSION": "local0",

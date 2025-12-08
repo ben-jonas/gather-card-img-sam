@@ -40,12 +40,10 @@ def set_env_vars_and_aws_resources():
     dynamodb.create_table( # type:ignore[reportAttributeAccessIssue]
         TableName='CardImgBatchStatus',
         KeySchema=[
-            { 'AttributeName': 'batchId', 'KeyType': 'HASH' },
-            { 'AttributeName': 'createdDate', 'KeyType': 'RANGE'}
+            { 'AttributeName': 'batchId', 'KeyType': 'HASH' }
         ],
         AttributeDefinitions=[
-            { 'AttributeName': 'batchId', 'AttributeType': 'S' },
-            { 'AttributeName': 'createdDate', 'AttributeType': 'S'}
+            { 'AttributeName': 'batchId', 'AttributeType': 'S' }
         ],
         BillingMode='PAY_PER_REQUEST'
     )

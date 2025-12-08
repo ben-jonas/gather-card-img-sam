@@ -15,8 +15,8 @@ IMG_SRC_REGEX_PATTERN = r'^(.*\.(jpg|jpeg|png|gif|webp|avif|bmp|tiff|tif))(\?.*)
 
 SLEEP_TIME = .1
 
-SCRAPE_SUCCESS_STATUS = 0
-SCRAPE_FAILURE_STATUS = -1
+SCRAPE_SUCCESS_STATUS = "SUCCESS"
+SCRAPE_FAILURE_STATUS = "FAILURE"
 
 s3 = boto3.client('s3')
 dynamodb = boto3.resource("dynamodb")
@@ -25,35 +25,47 @@ batchStatusTable = dynamodb.Table("CardImgBatchStatus") # type:ignore[reportAttr
 def lambda_handler(event, context):
     sqs_record_bodies = [ json.loads(record['body']) for record in event['Records'] ]
     print(f"Handling event with {len(sqs_record_bodies)} csv entries.")
+    print(json.dumps(event))
 
     # Our way of handling failed scrape requests is unsophisticated. An exception that occurs
     # partway through the batch of queued events will cause this whole lambda invocation to fail.
     # Any unprocessed queue events will be dropped, so we have to save them as failures during
     # exception processing. Therefore, we assign the statuses to all failures until we confirm
     # their success, one at a time.
-    statuses = { row['Card Page URI']: SCRAPE_FAILURE_STATUS for row in sqs_record_bodies }
+    # Here we construct a two-level dictionary, wherein batch ID's (referring to user-defined
+    # batches, NOT SQS batches) map to dicts of URLs to statuses. Statuses are initialized to
+    # a failure status.
+    statuses = {}
+    for sqs_record in sqs_record_bodies:
+        if not sqs_record['batchId'] in statuses:
+            statuses[sqs_record['batchId']] = {}
+        statuses_for_batch_id = statuses[sqs_record['batchId']]
+        cardpage_uri = sqs_record['itemFromBatch']['Card Page URI']
+        statuses_for_batch_id[cardpage_uri] = SCRAPE_FAILURE_STATUS
 
     for record_body in sqs_record_bodies:
+        batch_id, item_from_batch = record_body['batchId'], record_body['itemFromBatch']
         try:
-            parsed_cardpage_uri = urlparse(record_body['Card Page URI'].removesuffix('/'))
-            if not (parsed_cardpage_uri.scheme == 'https'):
-                raise ValueError("Cardpage link must start with https://")
+            parsed_cardpage_uri = urlparse(item_from_batch['Card Page URI'].removesuffix('/'))
             cardpage_domain = parsed_cardpage_uri.netloc.lower().removeprefix("www.")
-            if cardpage_domain not in APPROVED_DOMAINS_TO_CARDIMG_SELECTORS.keys():
-                raise ValueError("Cardpage domain " + cardpage_domain + 
-                                 " not in approved domains")
             cardimg_selector = APPROVED_DOMAINS_TO_CARDIMG_SELECTORS[cardpage_domain]
-            if already_has_key_at(parsed_cardpage_uri):
+            if already_has_s3_key_at(parsed_cardpage_uri):
                 print(f"Object already exists at {get_s3_prefix_for_cardimg(parsed_cardpage_uri)}.")
             else:
                 print(f"Object not found at {get_s3_prefix_for_cardimg(parsed_cardpage_uri)}. Retrieving it from {parsed_cardpage_uri.netloc}...")
                 locate_and_upload_img(parsed_cardpage_uri, cardimg_selector)
-            # TODO save success to dynamo
-            statuses[record_body['Card Page URI']] = SCRAPE_SUCCESS_STATUS
+            
+            # save success to dynamo
+            save_job_status_to_dynamo(batch_id, item_from_batch['Card Page URI'], SCRAPE_SUCCESS_STATUS)
+            statuses[batch_id][item_from_batch['Card Page URI']] = SCRAPE_SUCCESS_STATUS
             
         except Exception as e:
             print(f"Exception occured: {str(e)}")
-            # TODO save all failures to dynamo
+            # save all failures (and pending jobs we didn't get to) as failures in dynamo
+            for pending_batch_id, statuses_for_id in statuses.items():
+                for uri, status in statuses_for_id.items():
+                    if not status == SCRAPE_SUCCESS_STATUS:
+                        save_job_status_to_dynamo(pending_batch_id, uri, SCRAPE_FAILURE_STATUS)
             return {
                 'statusCode': 500,
                 'headers': {'Content-Type': 'application/json'},
@@ -67,7 +79,7 @@ def lambda_handler(event, context):
         }),
     }
 
-def already_has_key_at(parsed_cardpage_uri:ParseResult) -> bool:
+def already_has_s3_key_at(parsed_cardpage_uri:ParseResult) -> bool:
     s3_response = s3.list_objects_v2(
         Bucket=CARDIMG_BUCKET,
         Prefix=get_s3_prefix_for_cardimg(parsed_cardpage_uri)
@@ -118,3 +130,15 @@ def clean_cardimg_uri(cardimg_uri:str) -> str:
 
 def get_s3_prefix_for_cardimg(parsed_cardpage_uri:ParseResult) -> str:
     return f"{(parsed_cardpage_uri.netloc + parsed_cardpage_uri.path).lower()}/"
+
+def save_job_status_to_dynamo(batch_id:str, scraped_uri:str, status:str):
+    return batchStatusTable.update_item(
+                Key={'batchId': batch_id},
+                UpdateExpression=f'SET progressDocument.#scraped_uri = :status',
+                ExpressionAttributeNames={
+                    '#scraped_uri': scraped_uri
+                },
+                ExpressionAttributeValues={
+                    ':status': status
+                }
+            )

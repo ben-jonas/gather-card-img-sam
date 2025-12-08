@@ -76,15 +76,16 @@ Resources:
       AttributeDefinitions:
         - AttributeName: batchId
           AttributeType: S
-        - AttributeName: createdDate
-          AttributeType: S
       KeySchema:
         - AttributeName: batchId
           KeyType: HASH
-        - AttributeName: createdDate
-          KeyType: RANGE
       StreamSpecification:
         StreamViewType: NEW_AND_OLD_IMAGES
+      TimeToLiveSpecification:
+        AttributeName: expiresAt
+        Enabled: true
+      SSESpecification:
+        SSEEnabled: true
 
   ScrapeSingleCardImgFunction:
     Type: AWS::Serverless::Function
@@ -92,7 +93,7 @@ Resources:
       CodeUri: src/cardimg_single_scrape
       Handler: app.lambda_handler
       Policies: 
-        - DynamoDBReadPolicy:
+        - DynamoDBCrudPolicy:
             TableName: !Ref CardImgBatchStatusTable
         - S3CrudPolicy:
             BucketName: !Ref CardImgBucket

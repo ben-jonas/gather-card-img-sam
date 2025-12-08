@@ -1,5 +1,5 @@
 import boto3, csv, json, os, uuid
-from datetime import datetime
+from datetime import datetime, timedelta, UTC
 from io import StringIO
 from typing import Any
 from urllib.parse import urlparse
@@ -26,12 +26,13 @@ def lambda_handler(event, context) -> dict[str, Any]:
                 "body": json.dumps(user_errors),
             }
         else:
-            create_dynamo_record(data)
-            responses = send_csvrows_to_sqs(data)
+            new_batch_id = str(uuid.uuid4())
+            create_dynamo_record(data, new_batch_id)
+            responses = send_csvrows_to_sqs(data, new_batch_id)
             return {
                 "statusCode": 202,
                 "headers": {'Content-Type': 'application/json'},
-                "body": json.dumps(responses),
+                "body": json.dumps({"batchId": new_batch_id}),
             }
     except Exception as e:
         return {
@@ -96,27 +97,26 @@ def _validate_cardpage_uri(csv_row:dict[str, str]) -> list[str]:
     return errors
 
 
-def send_csvrows_to_sqs(csv_data:list[dict[str, str]]) -> list[dict[str,str]]:
+def send_csvrows_to_sqs(csv_data:list[dict[str, str]], batch_id:str) -> list[dict[str,str]]:
     responses = []
-    for line in csv_data:
+    for row in csv_data:
+        sqs_message_body = { "batchId": batch_id, "itemFromBatch": row}
         sqs_response = sqs.send_message(
             QueueUrl=CARD_IMG_FETCH_QUEUE,
-            MessageBody=json.dumps(line)
+            MessageBody=json.dumps(sqs_message_body)
         )
         responses.append(sqs_response)
     return responses
 
 
-def create_dynamo_record(csv_data:list[dict[str, str]]) -> str:
+def create_dynamo_record(csv_data:list[dict[str, str]], batch_id:str):
     progress_document = {}
     for row in csv_data:
         progress_document[row[CARD_PAGE_URI_COLUMN]] = "PENDING"
-    batch_id = uuid.uuid4()
     batchStatusTable = dynamodb.Table("CardImgBatchStatus") # type:ignore[reportAttributeAccessIssue]
     batchStatusTable.put_item(Item={
-        "batchId": str(batch_id),
-        "createdDate": datetime.now().isoformat(),
-        "progressDocument": progress_document
+        "batchId": batch_id,
+        "progressDocument": progress_document,
+        "expiresAt": int((datetime.now(UTC) + timedelta(days=30)).timestamp())
         }
     )
-    return str(batch_id)
