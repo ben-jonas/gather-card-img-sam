@@ -140,7 +140,7 @@ Resources:
           Type: Api
           Properties:
             RestApiId: !Ref CardImgApi
-            Path: /cardimg/batch/view-status
+            Path: /cardimg/batch/{batchId}/view-status
             Method: get
 
 Outputs:
