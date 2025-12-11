@@ -105,6 +105,9 @@ Resources:
           Type: SQS
           Properties:
             Queue: !GetAtt CardImgFetchQueue.Arn
+            ScalingConfig: 
+              MaximumConcurrency: 2
+            
   
   CardImgAddBatchFunction:
     Type: AWS::Serverless::Function

@@ -44,6 +44,21 @@
             },
         },
         {
+            "type": "aws-sam",
+            "request": "direct-invoke",
+            "name": "gather-card-imgs-sam:CardImgViewBatchStatusFunction - nonexistent",
+            "invokeTarget": {
+                "target": "template",
+                "templatePath": "${workspaceFolder}/template.yaml",
+                "logicalId": "CardImgViewBatchStatusFunction"
+            },
+            "lambda": {
+                "payload": {
+                    "path": "${workspaceFolder}/events/viewstatus/usererror/nonexistent-record.json"
+                }
+            },
+        },
+        {
             "type": "debugpy",
             "request": "launch",
             "name": "Invoke cardimg_add_batch lambda handler with Event vs localstack",
